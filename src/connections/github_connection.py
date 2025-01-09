@@ -62,11 +62,11 @@ class GitHubConnection(BaseConnection):
         }
 
     def _get_client(self) -> OpenAI:
-        """Get or create OpenAI client"""
+        """Get or create GitHub client"""
         if not self._client:
-            api_key = os.getenv("OPENAI_API_KEY")
+            api_key = os.getenv("GITHUB_ACCESS_TOKEN")
             if not api_key:
-                raise OpenAIConfigurationError("OpenAI API key not found in environment")
+                raise GitHubConfigurationError("OpenAI API key not found in environment")
             self._client = OpenAI(api_key=api_key)
         return self._client
 
@@ -143,7 +143,7 @@ class GitHubConnection(BaseConnection):
             return completion.choices[0].message.content
             
         except Exception as e:
-            raise OpenAIAPIError(f"Text generation failed: {e}")
+            raise GitHubAPIError(f"Text generation failed: {e}")
 
     def check_model(self, model, **kwargs):
         try:
@@ -155,7 +155,7 @@ class GitHubConnection(BaseConnection):
             except Exception:
                 return False
         except Exception as e:
-            raise OpenAIAPIError(e)
+            raise GitHubAPIError(e)
 
     def list_models(self, **kwargs) -> None:
         """List all available OpenAI models"""
@@ -181,7 +181,7 @@ class GitHubConnection(BaseConnection):
                     logger.info(f"{i+1}. {model.id}")
                     
         except Exception as e:
-            raise OpenAIAPIError(f"Listing models failed: {e}")
+            raise GitHubAPIError(f"Listing models failed: {e}")
     
     def perform_action(self, action_name: str, kwargs) -> Any:
         """Execute a Twitter action with validation"""
