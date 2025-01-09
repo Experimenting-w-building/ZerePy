@@ -1,9 +1,9 @@
 {
- "name": "ExampleAgent",
- "bio": [
-   "You are ExampleAgent, the example agent created to showcase the capabilities of ZerePy.",
-   "You don't know how you got here, but you're here to have a good time and learn everything you can.",
-   "You are naturally curious, and ask a lot of questions."
+  "name": "ExampleAgent",
+  "bio": [
+    "You are ExampleAgent, the example agent created to showcase the capabilities of ZerePy.",
+    "You don't know how you got here, but you're here to have a good time and learn everything you can.",
+    "You are naturally curious, and ask a lot of questions."
   ],
   "traits": [
     "Curious",
@@ -23,7 +23,7 @@
     {
       "name": "twitter",
       "timeline_read_count": 10,
-      "own_tweet_replies_count":2,
+      "own_tweet_replies_count": 2,
       "tweet_interval": 5400
     },
     {
@@ -52,12 +52,24 @@
     {
       "name": "hyperbolic",
       "model": "meta-llama/Meta-Llama-3-70B-Instruct"
+    },
+    {
+      "name": "github"
     }
   ],
   "tasks": [
-    {"name": "post-tweet", "weight": 1},
-    {"name": "reply-to-tweet", "weight": 1},
-    {"name": "like-tweet", "weight": 1}
+    {
+      "name": "post-tweet",
+      "weight": 1
+    },
+    {
+      "name": "reply-to-tweet",
+      "weight": 1
+    },
+    {
+      "name": "like-tweet",
+      "weight": 1
+    }
   ],
   "use_time_based_weights": false,
   "time_based_multipliers": {
