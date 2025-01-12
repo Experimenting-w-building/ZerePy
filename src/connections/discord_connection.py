@@ -253,23 +253,27 @@ class DiscordConnection(BaseConnection):
         request_path = f"/guilds/{server_id}/channels"
         response = self._get_request(request_path)
         text_channels = self._filter_channels_for_type_text(response)
-        return text_channels
+        formatted_response = self._format_channels(text_channels)
+
+        logger.info(f"Retrieved {len(formatted_response)} channels")
+        return formatted_response
 
     def read_messages(self, channel_id: str, count: int, **kwargs) -> dict:
         """Reading messages in a channel"""
         logger.debug("Sending a new message")
         request_path = f"/channels/{channel_id}/messages?limit={count}"
         response = self._get_request(request_path)
+        formatted_response = self._format_messages(response)
 
-        logger.info(f"Retrieved {len(response)} messages")
-
-        return response
+        logger.info(f"Retrieved {len(formatted_response)} messages")
+        return formatted_response
 
     def read_mentioned_messages(self, channel_id: str, count: int, **kwargs) -> dict:
         """Reads messages in a channel and filters for bot mentioned messages"""
         messages = self.read_messages(channel_id, count)
-
         mentioned_messages = self._filter_message_for_bot_mentions(messages)
+
+        logger.info(f"Retrieved {len(mentioned_messages)} mentioned messages")
         return mentioned_messages
 
     def post_message(self, channel_id: str, message: str, **kwargs) -> dict:
@@ -279,9 +283,10 @@ class DiscordConnection(BaseConnection):
         request_path = f"/channels/{channel_id}/messages"
         payload = json.dumps({"content": f"{message}"})
         response = self._post_request(request_path, payload)
+        formatted_response = self._format_posted_message(response)
 
         logger.info("Message posted successfully")
-        return response
+        return formatted_response
 
     def reply_to_message(
         self, channel_id: str, message_id: str, message: str, **kwargs
@@ -300,7 +305,10 @@ class DiscordConnection(BaseConnection):
             }
         )
         response = self._post_request(request_path, payload)
-        return response
+        formatted_response = self._format_reply_message(response)
+
+        logger.info("Reply message posted successfully")
+        return formatted_response
 
     def react_to_message(
         self, channel_id: str, message_id: str, emoji_name: str, **kwargs
@@ -312,7 +320,68 @@ class DiscordConnection(BaseConnection):
             f"/channels/{channel_id}/messages/{message_id}/reactions/{emoji_name}/@me"
         )
         self._put_request(request_path)
+
+        logger.info("Reacted to message successfully")
         return
+
+    def _format_reply_message(self, reply_message: dict) -> dict:
+        """Helper method to format reply messages"""
+        mentions = []
+        for mention in reply_message["mentions"]:
+            mentions.append({"id": mention["id"], "username": mention["username"]})
+        return {
+            "id": reply_message["id"],
+            "channel_id": reply_message["channel_id"],
+            "author": reply_message["author"]["username"],
+            "content": reply_message["content"],
+            "timestamp": reply_message["timestamp"],
+            "mentions": mentions,
+        }
+
+    def _format_posted_message(self, posted_message: dict) -> dict:
+        """Helper method to format posted messages"""
+        mentions = []
+        for mention in posted_message["mentions"]:
+            mentions.append({"id": mention["id"], "username": mention["username"]})
+
+        return {
+            "id": posted_message["id"],
+            "channel_id": posted_message["channel_id"],
+            "content": posted_message["content"],
+            "timestamp": posted_message["timestamp"],
+            "mentions": mentions,
+        }
+
+    def _format_messages(self, messages: dict) -> dict:
+        """Helper method to format messages"""
+        formatted_messages = []
+        for message in messages:
+            mentions = []
+            for mention in message["mentions"]:
+                mentions.append({"id": mention["id"], "username": mention["username"]})
+            formatted_message = {
+                "id": message["id"],
+                "channel_id": message["channel_id"],
+                "author": message["author"]["username"],
+                "message": message["content"],
+                "timestamp": message["timestamp"],
+                "mentions": mentions,
+            }
+            formatted_messages.append(formatted_message)
+        return formatted_messages
+
+    def _format_channels(self, channels: dict) -> dict:
+        """Helper method to format channels"""
+        formatted_channels = []
+        for channel in channels:
+            formatted_channel = {
+                "id": channel["id"],
+                "type": channel["type"],
+                "name": channel["name"],
+                "server_id": channel["guild_id"],
+            }
+            formatted_channels.append(formatted_channel)
+        return formatted_channels
 
     def _put_request(self, url_path: str) -> None:
         """Helper method to make PUT request"""
@@ -322,7 +391,6 @@ class DiscordConnection(BaseConnection):
             "Authorization": self._get_request_auth_token(),
         }
         response = requests.request("PUT", url, headers=headers, data={})
-        print(response)
         if response.status_code != 204:
             raise DiscordAPIError(
                 f"Failed to connect to Discord: {response.status_code} - {response.text}"
@@ -362,7 +430,7 @@ class DiscordConnection(BaseConnection):
         return f"Bot {os.getenv('DISCORD_TOKEN')}"
 
     def _test_connection(self, api_key: str) -> None:
-        """Check if Discord is reachable"""
+        """Helper method to check if Discord is reachable"""
         try:
             response = self._get_request("/users/@me")
             self.bot_username = response["username"]
