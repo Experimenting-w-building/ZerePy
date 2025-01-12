@@ -31,7 +31,6 @@ class DiscordAPIError(DiscordConnectionError):
 class DiscordConnection(BaseConnection):
     def __init__(self, config: Dict[str, Any]):
         super().__init__(config)
-        self.default_channel_id = config.get("default_channel_id")
         self.base_url = "https://discord.com/api/v10"
 
     @property
@@ -40,7 +39,7 @@ class DiscordConnection(BaseConnection):
 
     def validate_config(self, config: Dict[str, Any]) -> Dict[str, Any]:
         """Validate Discord configuration from JSON"""
-        required_fields = ["default_channel_id"]
+        required_fields = []
         missing_fields = [field for field in required_fields if field not in config]
 
         if missing_fields:
@@ -49,10 +48,10 @@ class DiscordConnection(BaseConnection):
             )
 
         if (
-            not isinstance(config["default_channel_id"], int)
-            or config["default_channel_id"] <= 0
+            not isinstance(config["message_read_count"], int)
+            or config["message_read_count"] <= 0
         ):
-            raise ValueError("default_channel_id must be a positive integer")
+            raise ValueError("message_read_count must be a positive integer")
 
         return config
 
@@ -64,9 +63,9 @@ class DiscordConnection(BaseConnection):
                 parameters=[
                     ActionParameter(
                         "channel_id",
-                        False,
+                        True,
                         str,
-                        "The channel id to get messages from (default: config's default_channel_id)",
+                        "The channel id to get messages from",
                     ),
                     ActionParameter(
                         "count",
@@ -81,16 +80,33 @@ class DiscordConnection(BaseConnection):
                 name="post-message",
                 parameters=[
                     ActionParameter(
-                        "message", True, str, "Text content of the message"
+                        "channel_id",
+                        True,
+                        str,
+                        "The channel id for the message to be posted in",
                     ),
                     ActionParameter(
-                        "channel_id",
-                        False,
-                        str,
-                        "The channel id to get messages from (default: config's default_channel_id)",
+                        "message", True, str, "Text content of the message"
                     ),
                 ],
                 description="Post a new message",
+            ),
+            # TODO: use message_reference in payload??
+            "reply-to-message": Action(
+                name="reply-to-message",
+                parameters=[
+                    ActionParameter(
+                        "channel_id",
+                        True,
+                        str,
+                        "The channel id to get messages from",
+                    ),
+                    ActionParameter(
+                        "message_id", True, str, "ID of the message to reply to"
+                    ),
+                    ActionParameter("message", True, str, "Reply message content"),
+                ],
+                description="Reply to an existing tweet",
             ),
         }
 
@@ -155,11 +171,9 @@ class DiscordConnection(BaseConnection):
         except Exception as e:
             raise DiscordConnectionError(f"Connection test failed: {e}")
 
-    def read_messages(self, channel_id: int = None, count: int = 1, **kwargs) -> str:
+    def read_messages(self, channel_id: str, count: int, **kwargs) -> str:
         """Reading messages"""
         logger.debug("Sending a new message")
-
-        channel_id = self.default_channel_id
         request_path = f"/channels/{channel_id}/messages?limit={count}"
         response = self._get_request(request_path)
 
@@ -167,22 +181,40 @@ class DiscordConnection(BaseConnection):
 
         return response
 
-    def post_message(self, message: str, channel_id: int = None, **kwargs) -> dict:
+    def post_message(self, channel_id: str, message: str, **kwargs) -> dict:
         """Send a new message"""
         logger.debug("Sending a new message")
 
-        channel_id = self.default_channel_id
         request_path = f"/channels/{channel_id}/messages"
-        payload = f"content={message}"
+        payload = json.dumps({"content": f"{message}"})
         response = self._post_request(request_path, payload)
 
         logger.info("Message posted successfully")
         return response
 
+    def reply_to_message(
+        self, channel_id: str, message_id: str, message: str, **kwargs
+    ) -> dict:
+        """Reply to a message"""
+        logger.debug("Replying to a message")
+
+        request_path = f"/channels/{channel_id}/messages"
+        payload = json.dumps(
+            {
+                "content": f"{message}",
+                "message_reference": {
+                    "channel_id": f"{channel_id}",
+                    "message_id": f"{message_id}",
+                },
+            }
+        )
+        response = self._post_request(request_path, payload)
+        return response
+
     def _post_request(self, url_path: str, payload: str) -> dict:
         url = f"{self.base_url}{url_path}"
         headers = {
-            "Content-Type": "application/x-www-form-urlencoded",
+            "Content-Type": "application/json",
             "Accept": "application/json",
             "Authorization": f"Bot {os.getenv('DISCORD_TOKEN')}",
         }
@@ -207,6 +239,7 @@ class DiscordConnection(BaseConnection):
         return json.loads(response.text)
 
     def perform_action(self, action_name: str, kwargs) -> Any:
+        print(f"{action_name}: {kwargs}")
         if action_name not in self.actions:
             raise KeyError(f"Unknown action: {action_name}")
 
@@ -214,6 +247,11 @@ class DiscordConnection(BaseConnection):
         errors = action.validate_params(kwargs)
         if errors:
             raise ValueError(f"Invalid parameters: {', '.join(errors)}")
+
+        # Add config parameters if not provided
+        if action_name == "read-messages":
+            if "count" not in kwargs:
+                kwargs["count"] = self.config["message_read_count"]
 
         # Call the appropriate method based on action name
         method_name = action_name.replace("-", "_")
