@@ -7,17 +7,24 @@ from src.connections.base_connection import BaseConnection, Action, ActionParame
 
 logger = logging.getLogger("connectinos.hyperbolic_connection")
 
+
 class HyperbolicConnectionError(Exception):
     """Base exception for Hyperbolic connection errors"""
+
     pass
+
 
 class HyperbolicConfigurationError(HyperbolicConnectionError):
     """Raised when there are configuration/credential issues"""
+
     pass
+
 
 class HyperbolicAPIError(HyperbolicConnectionError):
     """Raised when Hyperbolic API requests fail"""
+
     pass
+
 
 class HyperbolicConnection(BaseConnection):
     def __init__(self, config: Dict[str, Any]):
@@ -32,14 +39,16 @@ class HyperbolicConnection(BaseConnection):
         """Validate Hyperbolic configuration from JSON"""
         required_fields = ["model"]
         missing_fields = [field for field in required_fields if field not in config]
-        
+
         if missing_fields:
-            raise ValueError(f"Missing required configuration fields: {', '.join(missing_fields)}")
-            
+            raise ValueError(
+                f"Missing required configuration fields: {', '.join(missing_fields)}"
+            )
+
         # Validate model exists (will be checked in detail during configure)
         if not isinstance(config["model"], str):
             raise ValueError("model must be a string")
-            
+
         return config
 
     def register_actions(self) -> None:
@@ -48,25 +57,36 @@ class HyperbolicConnection(BaseConnection):
             "generate-text": Action(
                 name="generate-text",
                 parameters=[
-                    ActionParameter("prompt", True, str, "The input prompt for text generation"),
-                    ActionParameter("system_prompt", True, str, "System prompt to guide the model"),
+                    ActionParameter(
+                        "prompt", True, str, "The input prompt for text generation"
+                    ),
+                    ActionParameter(
+                        "system_prompt", True, str, "System prompt to guide the model"
+                    ),
                     ActionParameter("model", False, str, "Model to use for generation"),
-                    ActionParameter("temperature", False, float, "A decimal number that determines the degree of randomness in the response.")
+                    ActionParameter(
+                        "temperature",
+                        False,
+                        float,
+                        "A decimal number that determines the degree of randomness in the response.",
+                    ),
                 ],
-                description="Generate text using Hyperbolic models"
+                description="Generate text using Hyperbolic models",
             ),
             "check-model": Action(
                 name="check-model",
                 parameters=[
-                    ActionParameter("model", True, str, "Model name to check availability")
+                    ActionParameter(
+                        "model", True, str, "Model name to check availability"
+                    )
                 ],
-                description="Check if a specific model is available"
+                description="Check if a specific model is available",
             ),
             "list-models": Action(
                 name="list-models",
                 parameters=[],
-                description="List all available Hyperbolic models"
-            )
+                description="List all available Hyperbolic models",
+            ),
         }
 
     def _get_client(self) -> OpenAI:
@@ -74,10 +94,11 @@ class HyperbolicConnection(BaseConnection):
         if not self._client:
             api_key = os.getenv("HYPERBOLIC_API_KEY")
             if not api_key:
-                raise HyperbolicConfigurationError("Hyperbolic API key not found in environment")
+                raise HyperbolicConfigurationError(
+                    "Hyperbolic API key not found in environment"
+                )
             self._client = OpenAI(
-                api_key=api_key,
-                base_url="https://api.hyperbolic.xyz/v1"
+                api_key=api_key, base_url="https://api.hyperbolic.xyz/v1"
             )
         return self._client
 
@@ -88,7 +109,7 @@ class HyperbolicConnection(BaseConnection):
         if self.is_configured():
             print("\nHyperbolic API is already configured.")
             response = input("Do you want to reconfigure? (y/n): ")
-            if response.lower() != 'y':
+            if response.lower() != "y":
                 return True
 
         print("\n📝 To get your Hyperbolic API credentials:")
@@ -96,21 +117,18 @@ class HyperbolicConnection(BaseConnection):
         print("2. Log in with your method of choice")
         print("3. Verify your email address")
         print("4. Generate an API key")
-        
+
         api_key = input("\nEnter your Hyperbolic API key: ")
 
         try:
-            if not os.path.exists('.env'):
-                with open('.env', 'w') as f:
-                    f.write('')
+            if not os.path.exists(".env"):
+                with open(".env", "w") as f:
+                    f.write("")
 
-            set_key('.env', 'HYPERBOLIC_API_KEY', api_key)
-            
+            set_key(".env", "HYPERBOLIC_API_KEY", api_key)
+
             # Validate the API key by trying to list models
-            client = OpenAI(
-                api_key=api_key,
-                base_url="https://api.hyperbolic.xyz/v1"
-            )
+            client = OpenAI(api_key=api_key, base_url="https://api.hyperbolic.xyz/v1")
             client.models.list()
 
             print("\n✅ Hyperbolic API configuration successfully saved!")
@@ -121,31 +139,30 @@ class HyperbolicConnection(BaseConnection):
             logger.error(f"Configuration failed: {e}")
             return False
 
-    def is_configured(self, verbose = False) -> bool:
+    def is_configured(self, verbose=False) -> bool:
         """Check if Hyperbolic API key is configured and valid"""
         try:
             load_dotenv()
-            api_key = os.getenv('HYPERBOLIC_API_KEY')
+            api_key = os.getenv("HYPERBOLIC_API_KEY")
             if not api_key:
                 return False
 
-            client = OpenAI(
-                api_key=api_key,
-                base_url="https://api.hyperbolic.xyz/v1"
-            )
+            client = OpenAI(api_key=api_key, base_url="https://api.hyperbolic.xyz/v1")
             client.models.list()
             return True
-            
+
         except Exception as e:
             if verbose:
                 logger.debug(f"Configuration check failed: {e}")
             return False
 
-    def generate_text(self, prompt: str, system_prompt: str, model: str = None, **kwargs) -> str:
+    def generate_text(
+        self, prompt: str, system_prompt: str, model: str = None, **kwargs
+    ) -> str:
         """Generate text using Hyperbolic models"""
         try:
             client = self._get_client()
-            
+
             # Use configured model if none provided
             if not model:
                 model = self.config["model"]
@@ -159,7 +176,7 @@ class HyperbolicConnection(BaseConnection):
             )
 
             return completion.choices[0].message.content
-            
+
         except Exception as e:
             raise HyperbolicAPIError(f"Text generation failed: {e}")
 
@@ -175,7 +192,7 @@ class HyperbolicConnection(BaseConnection):
                 return False
             except Exception as e:
                 raise HyperbolicAPIError(f"Model check failed: {e}")
-                
+
         except Exception as e:
             raise HyperbolicAPIError(f"Model check failed: {e}")
 
@@ -184,16 +201,16 @@ class HyperbolicConnection(BaseConnection):
         try:
             client = self._get_client()
             response = client.models.list().data
-        
-            model_ids= [model.id for model in response]
+
+            model_ids = [model.id for model in response]
 
             logger.info("\nAVAILABLE MODELS:")
             for i, model_id in enumerate(model_ids, start=1):
                 logger.info(f"{i}. {model_id}")
-                    
+
         except Exception as e:
             raise HyperbolicAPIError(f"Listing models failed: {e}")
-    
+
     def perform_action(self, action_name: str, kwargs) -> Any:
         """Execute a Hyperbolic action with validation"""
         if action_name not in self.actions:
@@ -201,7 +218,7 @@ class HyperbolicConnection(BaseConnection):
 
         # Explicitly reload environment variables
         load_dotenv()
-        
+
         if not self.is_configured(verbose=True):
             raise HyperbolicConfigurationError("Hyperbolic is not properly configured")
 
@@ -211,6 +228,6 @@ class HyperbolicConnection(BaseConnection):
             raise ValueError(f"Invalid parameters: {', '.join(errors)}")
 
         # Call the appropriate method based on action name
-        method_name = action_name.replace('-', '_')
+        method_name = action_name.replace("-", "_")
         method = getattr(self, method_name)
         return method(**kwargs)

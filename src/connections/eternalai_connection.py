@@ -8,17 +8,24 @@ from src.connections.base_connection import BaseConnection, Action, ActionParame
 
 logger = logging.getLogger(__name__)
 
+
 class EternalAIConnectionError(Exception):
     """Base exception for EternalAI connection errors"""
+
     pass
+
 
 class EternalAIConfigurationError(EternalAIConnectionError):
     """Raised when there are configuration/credential issues"""
+
     pass
+
 
 class EternalAIAPIError(EternalAIConnectionError):
     """Raised when EternalAI API requests fail"""
+
     pass
+
 
 class EternalAIConnection(BaseConnection):
     def __init__(self, config: Dict[str, Any]):
@@ -33,13 +40,15 @@ class EternalAIConnection(BaseConnection):
         """Validate EternalAI configuration from JSON"""
         required_fields = ["model"]
         missing_fields = [field for field in required_fields if field not in config]
-        
+
         if missing_fields:
-            raise ValueError(f"Missing required configuration fields: {', '.join(missing_fields)}")
-            
+            raise ValueError(
+                f"Missing required configuration fields: {', '.join(missing_fields)}"
+            )
+
         if not isinstance(config["model"], str):
             raise ValueError("model must be a string")
-            
+
         return config
 
     def register_actions(self) -> None:
@@ -48,24 +57,30 @@ class EternalAIConnection(BaseConnection):
             "generate-text": Action(
                 name="generate-text",
                 parameters=[
-                    ActionParameter("prompt", True, str, "The input prompt for text generation"),
-                    ActionParameter("system_prompt", True, str, "System prompt to guide the model"),
-                    ActionParameter("model", False, str, "Model to use for generation")
+                    ActionParameter(
+                        "prompt", True, str, "The input prompt for text generation"
+                    ),
+                    ActionParameter(
+                        "system_prompt", True, str, "System prompt to guide the model"
+                    ),
+                    ActionParameter("model", False, str, "Model to use for generation"),
                 ],
-                description="Generate text using EternalAI models"
+                description="Generate text using EternalAI models",
             ),
             "check-model": Action(
                 name="check-model",
                 parameters=[
-                    ActionParameter("model", True, str, "Model name to check availability")
+                    ActionParameter(
+                        "model", True, str, "Model name to check availability"
+                    )
                 ],
-                description="Check if a specific model is available"
+                description="Check if a specific model is available",
             ),
             "list-models": Action(
                 name="list-models",
                 parameters=[],
-                description="List all available EternalAI models"
-            )
+                description="List all available EternalAI models",
+            ),
         }
 
     def _get_client(self) -> OpenAI:
@@ -74,7 +89,9 @@ class EternalAIConnection(BaseConnection):
             api_key = os.getenv("EternalAI_API_KEY")
             api_url = os.getenv("EternalAI_API_URL")
             if not api_key or not api_url:
-                raise EternalAIConfigurationError("EternalAI credentials not found in environment")
+                raise EternalAIConfigurationError(
+                    "EternalAI credentials not found in environment"
+                )
             self._client = OpenAI(api_key=api_key, base_url=api_url)
         return self._client
 
@@ -85,7 +102,7 @@ class EternalAIConnection(BaseConnection):
         if self.is_configured():
             print("\nEternalAI API is already configured.")
             response = input("Do you want to reconfigure? (y/n): ")
-            if response.lower() != 'y':
+            if response.lower() != "y":
                 return True
 
         print("\n📝 To get your EternalAI credentials:")
@@ -97,12 +114,12 @@ class EternalAIConnection(BaseConnection):
         api_url = input("\nEnter your EternalAI API url: ")
 
         try:
-            if not os.path.exists('.env'):
-                with open('.env', 'w') as f:
-                    f.write('')
+            if not os.path.exists(".env"):
+                with open(".env", "w") as f:
+                    f.write("")
 
-            set_key('.env', 'EternalAI_API_KEY', api_key)
-            set_key('.env', 'EternalAI_API_URL', api_url)
+            set_key(".env", "EternalAI_API_KEY", api_key)
+            set_key(".env", "EternalAI_API_URL", api_url)
 
             # Validate credentials
             client = OpenAI(api_key=api_key, base_url=api_url)
@@ -120,8 +137,8 @@ class EternalAIConnection(BaseConnection):
         """Check if EternalAI API credentials are configured and valid"""
         try:
             load_dotenv()
-            api_key = os.getenv('EternalAI_API_KEY')
-            api_url = os.getenv('EternalAI_API_URL')
+            api_key = os.getenv("EternalAI_API_KEY")
+            api_url = os.getenv("EternalAI_API_URL")
             if not api_key or not api_url:
                 return False
 
@@ -134,7 +151,14 @@ class EternalAIConnection(BaseConnection):
                 logger.debug(f"Configuration check failed: {e}")
             return False
 
-    def generate_text(self, prompt: str, system_prompt: str, model: str = None, chain_id: str = None, **kwargs) -> str:
+    def generate_text(
+        self,
+        prompt: str,
+        system_prompt: str,
+        model: str = None,
+        chain_id: str = None,
+        **kwargs,
+    ) -> str:
         """Generate text using EternalAI models"""
         try:
             client = self._get_client()
@@ -152,16 +176,22 @@ class EternalAIConnection(BaseConnection):
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": prompt},
                 ],
-                extra_body={"chain_id": chain_id}
+                extra_body={"chain_id": chain_id},
             )
 
             if completion.choices is None:
-                raise EternalAIAPIError(f"Text generation failed: completion.choices is None")
+                raise EternalAIAPIError(
+                    "Text generation failed: completion.choices is None"
+                )
             try:
                 if completion.onchain_data is not None:
-                    logger.info(f"response onchain data: {json.dumps(completion.onchain_data, indent=4)}")
+                    logger.info(
+                        f"response onchain data: {json.dumps(completion.onchain_data, indent=4)}"
+                    )
             except:
-                logger.info(f"response onchain data object: {completion.onchain_data}", )
+                logger.info(
+                    f"response onchain data object: {completion.onchain_data}",
+                )
             return completion.choices[0].message.content
 
         except Exception as e:
@@ -184,18 +214,19 @@ class EternalAIConnection(BaseConnection):
         try:
             client = self._get_client()
             response = client.models.list().data
-            
+
             # Filter for fine-tuned models
             fine_tuned_models = [
-                model for model in response 
+                model
+                for model in response
                 if model.owned_by in ["organization", "user", "organization-owner"]
             ]
-            
+
             if fine_tuned_models:
                 logger.info("\nFINE-TUNED MODELS:")
                 for i, model in enumerate(fine_tuned_models):
-                    logger.info(f"{i+1}. {model.id}")
-                    
+                    logger.info(f"{i + 1}. {model.id}")
+
         except Exception as e:
             raise EternalAIAPIError(f"Listing models failed: {e}")
 
@@ -209,6 +240,6 @@ class EternalAIConnection(BaseConnection):
         if errors:
             raise ValueError(f"Invalid parameters: {', '.join(errors)}")
 
-        method_name = action_name.replace('-', '_')
+        method_name = action_name.replace("-", "_")
         method = getattr(self, method_name)
         return method(**kwargs)

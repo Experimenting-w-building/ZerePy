@@ -33,7 +33,7 @@
     },
     {
       "name": "openai",
-      "model": "gpt-3.5-turbo"
+      "model": "omni-moderation-*"
     },
     {
       "name": "anthropic",
@@ -55,6 +55,10 @@
     },
     {
       "name": "github"
+    },
+    {
+      "name": "discord",
+      "default_channel_id": 1327792083599228971
     }
   ],
   "tasks": [

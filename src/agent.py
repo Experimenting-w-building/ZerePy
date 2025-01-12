@@ -8,8 +8,6 @@ from dotenv import load_dotenv
 from src.connection_manager import ConnectionManager
 from src.helpers import print_h_bar
 from src.action_handler import execute_action
-import src.actions.twitter_actions  
-import src.actions.echochamber_actions  
 from datetime import datetime
 
 
@@ -17,16 +15,16 @@ REQUIRED_FIELDS = ["name", "bio", "traits", "examples", "loop_delay", "config", 
 
 logger = logging.getLogger("agent")
 
+
 class ZerePyAgent:
-    def __init__(
-            self,
-            agent_name: str
-    ):
+    def __init__(self, agent_name: str):
         try:
             agent_path = Path("agents") / f"{agent_name}.json"
             agent_dict = json.load(open(agent_path, "r"))
 
-            missing_fields = [field for field in REQUIRED_FIELDS if field not in agent_dict]
+            missing_fields = [
+                field for field in REQUIRED_FIELDS if field not in agent_dict
+            ]
             if missing_fields:
                 raise KeyError(f"Missing required fields: {', '.join(missing_fields)}")
 
@@ -40,19 +38,41 @@ class ZerePyAgent:
             self.use_time_based_weights = agent_dict["use_time_based_weights"]
             self.time_based_multipliers = agent_dict["time_based_multipliers"]
 
-            has_twitter_tasks = any("tweet" in task["name"] for task in agent_dict.get("tasks", []))
-            
-            twitter_config = next((config for config in agent_dict["config"] if config["name"] == "twitter"), None)
-            
+            has_twitter_tasks = any(
+                "tweet" in task["name"] for task in agent_dict.get("tasks", [])
+            )
+
+            twitter_config = next(
+                (
+                    config
+                    for config in agent_dict["config"]
+                    if config["name"] == "twitter"
+                ),
+                None,
+            )
+
             if has_twitter_tasks and twitter_config:
                 self.tweet_interval = twitter_config.get("tweet_interval", 900)
-                self.own_tweet_replies_count = twitter_config.get("own_tweet_replies_count", 2)
+                self.own_tweet_replies_count = twitter_config.get(
+                    "own_tweet_replies_count", 2
+                )
 
             # Extract Echochambers config
-            echochambers_config = next((config for config in agent_dict["config"] if config["name"] == "echochambers"), None)
+            echochambers_config = next(
+                (
+                    config
+                    for config in agent_dict["config"]
+                    if config["name"] == "echochambers"
+                ),
+                None,
+            )
             if echochambers_config:
-                self.echochambers_message_interval = echochambers_config.get("message_interval", 60)
-                self.echochambers_history_count = echochambers_config.get("history_read_count", 50)
+                self.echochambers_message_interval = echochambers_config.get(
+                    "message_interval", 60
+                )
+                self.echochambers_history_count = echochambers_config.get(
+                    "history_read_count", 50
+                )
 
             self.is_llm_set = False
 
@@ -81,9 +101,11 @@ class ZerePyAgent:
         # Load Twitter username for self-reply detection if Twitter tasks exist
         if any("tweet" in task["name"] for task in self.tasks):
             load_dotenv()
-            self.username = os.getenv('TWITTER_USERNAME', '').lower()
+            self.username = os.getenv("TWITTER_USERNAME", "").lower()
             if not self.username:
-                logger.warning("Twitter username not found, some Twitter functionalities may be limited")
+                logger.warning(
+                    "Twitter username not found, some Twitter functionalities may be limited"
+                )
 
     def _construct_system_prompt(self) -> str:
         """Construct the system prompt from agent configuration"""
@@ -96,7 +118,9 @@ class ZerePyAgent:
                 prompt_parts.extend(f"- {trait}" for trait in self.traits)
 
             if self.examples or self.example_accounts:
-                prompt_parts.append("\nHere are some examples of your style (Please avoid repeating any of these):")
+                prompt_parts.append(
+                    "\nHere are some examples of your style (Please avoid repeating any of these):"
+                )
                 if self.examples:
                     prompt_parts.extend(f"- {example}" for example in self.examples)
 
@@ -105,33 +129,36 @@ class ZerePyAgent:
                         tweets = self.connection_manager.perform_action(
                             connection_name="twitter",
                             action_name="get-latest-tweets",
-                            params=[example_account]
+                            params=[example_account],
                         )
                         prompt_parts.extend(f"- {tweet['text']}" for tweet in tweets)
 
             self._system_prompt = "\n".join(prompt_parts)
 
         return self._system_prompt
-    
+
     def _adjust_weights_for_time(self, current_hour: int, task_weights: list) -> list:
         weights = task_weights.copy()
-        
+
         # Reduce tweet frequency during night hours (1 AM - 5 AM)
         if 1 <= current_hour <= 5:
             weights = [
-                weight * self.time_based_multipliers.get("tweet_night_multiplier", 0.4) if task["name"] == "post-tweet"
+                weight * self.time_based_multipliers.get("tweet_night_multiplier", 0.4)
+                if task["name"] == "post-tweet"
                 else weight
                 for weight, task in zip(weights, self.tasks)
             ]
-            
+
         # Increase engagement frequency during day hours (8 AM - 8 PM) (peak hours?🤔)
         if 8 <= current_hour <= 20:
             weights = [
-                weight * self.time_based_multipliers.get("engagement_day_multiplier", 1.5) if task["name"] in ("reply-to-tweet", "like-tweet")
+                weight
+                * self.time_based_multipliers.get("engagement_day_multiplier", 1.5)
+                if task["name"] in ("reply-to-tweet", "like-tweet")
                 else weight
                 for weight, task in zip(weights, self.tasks)
             ]
-        
+
         return weights
 
     def prompt_llm(self, prompt: str, system_prompt: str = None) -> str:
@@ -141,19 +168,19 @@ class ZerePyAgent:
         return self.connection_manager.perform_action(
             connection_name=self.model_provider,
             action_name="generate-text",
-            params=[prompt, system_prompt]
+            params=[prompt, system_prompt],
         )
 
     def perform_action(self, connection: str, action: str, **kwargs) -> None:
         return self.connection_manager.perform_action(connection, action, **kwargs)
-    
+
     def select_action(self, use_time_based_weights: bool = False) -> dict:
         task_weights = [weight for weight in self.task_weights.copy()]
-        
+
         if use_time_based_weights:
             current_hour = datetime.now().hour
             task_weights = self._adjust_weights_for_time(current_hour, task_weights)
-        
+
         return random.choices(self.tasks, weights=task_weights, k=1)[0]
 
     def loop(self):
@@ -177,40 +204,54 @@ class ZerePyAgent:
                 try:
                     # REPLENISH INPUTS
                     # TODO: Add more inputs to complexify agent behavior
-                    if "timeline_tweets" not in self.state or self.state["timeline_tweets"] is None or len(self.state["timeline_tweets"]) == 0:
+                    if (
+                        "timeline_tweets" not in self.state
+                        or self.state["timeline_tweets"] is None
+                        or len(self.state["timeline_tweets"]) == 0
+                    ):
                         if any("tweet" in task["name"] for task in self.tasks):
                             logger.info("\n👀 READING TIMELINE")
-                            self.state["timeline_tweets"] = self.connection_manager.perform_action(
-                                connection_name="twitter",
-                                action_name="read-timeline",
-                                params=[]
+                            self.state["timeline_tweets"] = (
+                                self.connection_manager.perform_action(
+                                    connection_name="twitter",
+                                    action_name="read-timeline",
+                                    params=[],
+                                )
                             )
 
                     if "room_info" not in self.state or self.state["room_info"] is None:
                         if any("echochambers" in task["name"] for task in self.tasks):
                             logger.info("\n👀 READING ECHOCHAMBERS ROOM INFO")
-                            self.state["room_info"] = self.connection_manager.perform_action(
-                                connection_name="echochambers",
-                                action_name="get-room-info",
-                                params={}
+                            self.state["room_info"] = (
+                                self.connection_manager.perform_action(
+                                    connection_name="echochambers",
+                                    action_name="get-room-info",
+                                    params={},
+                                )
                             )
 
                     # CHOOSE AN ACTION
                     # TODO: Add agentic action selection
-                    
-                    action = self.select_action(use_time_based_weights=self.use_time_based_weights)
+
+                    action = self.select_action(
+                        use_time_based_weights=self.use_time_based_weights
+                    )
                     action_name = action["name"]
 
                     # PERFORM ACTION
                     success = execute_action(self, action_name)
 
-                    logger.info(f"\n⏳ Waiting {self.loop_delay} seconds before next loop...")
+                    logger.info(
+                        f"\n⏳ Waiting {self.loop_delay} seconds before next loop..."
+                    )
                     print_h_bar()
                     time.sleep(self.loop_delay if success else 60)
 
                 except Exception as e:
                     logger.error(f"\n❌ Error in agent loop iteration: {e}")
-                    logger.info(f"⏳ Waiting {self.loop_delay} seconds before retrying...")
+                    logger.info(
+                        f"⏳ Waiting {self.loop_delay} seconds before retrying..."
+                    )
                     time.sleep(self.loop_delay)
 
         except KeyboardInterrupt:

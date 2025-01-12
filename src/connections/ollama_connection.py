@@ -9,18 +9,22 @@ logger = logging.getLogger(__name__)
 
 class OllamaConnectionError(Exception):
     """Base exception for Ollama connection errors"""
+
     pass
 
 
 class OllamaAPIError(OllamaConnectionError):
     """Raised when Ollama API requests fail"""
+
     pass
 
 
 class OllamaConnection(BaseConnection):
     def __init__(self, config: Dict[str, Any]):
         super().__init__(config)
-        self.base_url = config.get("base_url", "http://localhost:11434")  # Default to local Ollama setup
+        self.base_url = config.get(
+            "base_url", "http://localhost:11434"
+        )  # Default to local Ollama setup
 
     @property
     def is_llm_provider(self) -> bool:
@@ -32,7 +36,9 @@ class OllamaConnection(BaseConnection):
         missing_fields = [field for field in required_fields if field not in config]
 
         if missing_fields:
-            raise ValueError(f"Missing required configuration fields: {', '.join(missing_fields)}")
+            raise ValueError(
+                f"Missing required configuration fields: {', '.join(missing_fields)}"
+            )
 
         if not isinstance(config["base_url"], str):
             raise ValueError("base_url must be a string")
@@ -47,11 +53,16 @@ class OllamaConnection(BaseConnection):
             "generate-text": Action(
                 name="generate-text",
                 parameters=[
-                    ActionParameter("prompt", True, str, "The input prompt for text generation"),
-                    ActionParameter("system_prompt", True, str, "System prompt to guide the model"),
+                    # self, prompt: str, system_prompt: str, model: str = None, **kwargs
+                    ActionParameter(
+                        "prompt", True, str, "The input prompt for text generation"
+                    ),
+                    ActionParameter(
+                        "system_prompt", True, str, "System prompt to guide the model"
+                    ),
                     ActionParameter("model", False, str, "Model to use for generation"),
                 ],
-                description="Generate text using Ollama's running model"
+                description="Generate text using Ollama's running model",
             ),
         }
 
@@ -59,11 +70,15 @@ class OllamaConnection(BaseConnection):
         """Setup Ollama connection (minimal configuration required)"""
         print("\n🤖 OLLAMA CONFIGURATION")
 
-        print("\nℹ️ Ensure the Ollama service is running locally or accessible at the specified base URL.")
+        print(
+            "\nℹ️ Ensure the Ollama service is running locally or accessible at the specified base URL."
+        )
         response = input(f"Is Ollama accessible at {self.base_url}? (y/n): ")
 
-        if response.lower() != 'y':
-            new_url = input("\nEnter the base URL for Ollama (e.g., http://localhost:11434): ")
+        if response.lower() != "y":
+            new_url = input(
+                "\nEnter the base URL for Ollama (e.g., http://localhost:11434): "
+            )
             self.base_url = new_url
 
         try:
@@ -81,7 +96,9 @@ class OllamaConnection(BaseConnection):
             url = f"{self.base_url}/v1/models"
             response = requests.get(url)
             if response.status_code != 200:
-                raise OllamaAPIError(f"Failed to connect to Ollama: {response.status_code} - {response.text}")
+                raise OllamaAPIError(
+                    f"Failed to connect to Ollama: {response.status_code} - {response.text}"
+                )
         except Exception as e:
             raise OllamaConnectionError(f"Connection test failed: {e}")
 
@@ -95,7 +112,9 @@ class OllamaConnection(BaseConnection):
                 logger.error(f"Ollama configuration check failed: {e}")
             return False
 
-    def generate_text(self, prompt: str, system_prompt: str, model: str = None, **kwargs) -> str:
+    def generate_text(
+        self, prompt: str, system_prompt: str, model: str = None, **kwargs
+    ) -> str:
         """Generate text using Ollama API with streaming support"""
         try:
             url = f"{self.base_url}/api/generate"
@@ -107,7 +126,9 @@ class OllamaConnection(BaseConnection):
             response = requests.post(url, json=payload, stream=True)
 
             if response.status_code != 200:
-                raise OllamaAPIError(f"API error: {response.status_code} - {response.text}")
+                raise OllamaAPIError(
+                    f"API error: {response.status_code} - {response.text}"
+                )
 
             # Initialize an empty string to store the complete response
             full_response = ""
@@ -138,6 +159,6 @@ class OllamaConnection(BaseConnection):
             raise ValueError(f"Invalid parameters: {', '.join(errors)}")
 
         # Call the appropriate method based on action name
-        method_name = action_name.replace('-', '_')
+        method_name = action_name.replace("-", "_")
         method = getattr(self, method_name)
         return method(**kwargs)

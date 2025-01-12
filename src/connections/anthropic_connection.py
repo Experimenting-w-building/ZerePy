@@ -7,17 +7,24 @@ from src.connections.base_connection import BaseConnection, Action, ActionParame
 
 logger = logging.getLogger(__name__)
 
+
 class AnthropicConnectionError(Exception):
     """Base exception for Anthropic connection errors"""
+
     pass
+
 
 class AnthropicConfigurationError(AnthropicConnectionError):
     """Raised when there are configuration/credential issues"""
+
     pass
+
 
 class AnthropicAPIError(AnthropicConnectionError):
     """Raised when Anthropic API requests fail"""
+
     pass
+
 
 class AnthropicConnection(BaseConnection):
     def __init__(self, config: Dict[str, Any]):
@@ -32,13 +39,15 @@ class AnthropicConnection(BaseConnection):
         """Validate Anthropic configuration from JSON"""
         required_fields = ["model"]
         missing_fields = [field for field in required_fields if field not in config]
-        
+
         if missing_fields:
-            raise ValueError(f"Missing required configuration fields: {', '.join(missing_fields)}")
-            
+            raise ValueError(
+                f"Missing required configuration fields: {', '.join(missing_fields)}"
+            )
+
         if not isinstance(config["model"], str):
             raise ValueError("model must be a string")
-            
+
         return config
 
     def register_actions(self) -> None:
@@ -47,24 +56,30 @@ class AnthropicConnection(BaseConnection):
             "generate-text": Action(
                 name="generate-text",
                 parameters=[
-                    ActionParameter("prompt", True, str, "The input prompt for text generation"),
-                    ActionParameter("system_prompt", True, str, "System prompt to guide the model"),
-                    ActionParameter("model", False, str, "Model to use for generation")
+                    ActionParameter(
+                        "prompt", True, str, "The input prompt for text generation"
+                    ),
+                    ActionParameter(
+                        "system_prompt", True, str, "System prompt to guide the model"
+                    ),
+                    ActionParameter("model", False, str, "Model to use for generation"),
                 ],
-                description="Generate text using Anthropic models"
+                description="Generate text using Anthropic models",
             ),
             "check-model": Action(
                 name="check-model",
                 parameters=[
-                    ActionParameter("model", True, str, "Model name to check availability")
+                    ActionParameter(
+                        "model", True, str, "Model name to check availability"
+                    )
                 ],
-                description="Check if a specific model is available"
+                description="Check if a specific model is available",
             ),
             "list-models": Action(
                 name="list-models",
                 parameters=[],
-                description="List all available Anthropic models"
-            )
+                description="List all available Anthropic models",
+            ),
         }
 
     def _get_client(self) -> Anthropic:
@@ -72,7 +87,9 @@ class AnthropicConnection(BaseConnection):
         if not self._client:
             api_key = os.getenv("ANTHROPIC_API_KEY")
             if not api_key:
-                raise AnthropicConfigurationError("Anthropic API key not found in environment")
+                raise AnthropicConfigurationError(
+                    "Anthropic API key not found in environment"
+                )
             self._client = Anthropic(api_key=api_key)
         return self._client
 
@@ -83,22 +100,22 @@ class AnthropicConnection(BaseConnection):
         if self.is_configured():
             print("\nAnthropic API is already configured.")
             response = input("Do you want to reconfigure? (y/n): ")
-            if response.lower() != 'y':
+            if response.lower() != "y":
                 return True
 
         print("\n📝 To get your Anthropic API credentials:")
         print("1. Go to https://console.anthropic.com/settings/keys")
         print("2. Create a new API key.")
-        
+
         api_key = input("\nEnter your Anthropic API key: ")
 
         try:
-            if not os.path.exists('.env'):
-                with open('.env', 'w') as f:
-                    f.write('')
+            if not os.path.exists(".env"):
+                with open(".env", "w") as f:
+                    f.write("")
 
-            set_key('.env', 'ANTHROPIC_API_KEY', api_key)
-            
+            set_key(".env", "ANTHROPIC_API_KEY", api_key)
+
             # Validate the API key
             client = Anthropic(api_key=api_key)
             client.models.list()
@@ -111,28 +128,30 @@ class AnthropicConnection(BaseConnection):
             logger.error(f"Configuration failed: {e}")
             return False
 
-    def is_configured(self, verbose = False) -> bool:
+    def is_configured(self, verbose=False) -> bool:
         """Check if Anthropic API key is configured and valid"""
         try:
             load_dotenv()
-            api_key = os.getenv('ANTHROPIC_API_KEY')
+            api_key = os.getenv("ANTHROPIC_API_KEY")
             if not api_key:
                 return False
 
             client = Anthropic(api_key=api_key)
             client.models.list()
             return True
-            
+
         except Exception as e:
             if verbose:
                 logger.debug(f"Configuration check failed: {e}")
             return False
 
-    def generate_text(self, prompt: str, system_prompt: str, model: str = None, **kwargs) -> str:
+    def generate_text(
+        self, prompt: str, system_prompt: str, model: str = None, **kwargs
+    ) -> str:
         """Generate text using Anthropic models"""
         try:
             client = self._get_client()
-            
+
             # Use configured model if none provided
             if not model:
                 model = self.config["model"]
@@ -143,19 +162,11 @@ class AnthropicConnection(BaseConnection):
                 temperature=0,
                 system=system_prompt,
                 messages=[
-                    {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "text",
-                                "text": prompt
-                            }
-                        ]
-                    }
-                ]
+                    {"role": "user", "content": [{"type": "text", "text": prompt}]}
+                ],
             )
             return message.content[0].text
-            
+
         except Exception as e:
             raise AnthropicAPIError(f"Text generation failed: {e}")
 
@@ -171,7 +182,7 @@ class AnthropicConnection(BaseConnection):
                 return False
             except Exception as e:
                 raise AnthropicAPIError(f"Model check failed: {e}")
-                
+
         except Exception as e:
             raise AnthropicAPIError(f"Model check failed: {e}")
 
@@ -184,8 +195,8 @@ class AnthropicConnection(BaseConnection):
 
             logger.info("\nCLAUDE MODELS:")
             for i, model in enumerate(model_ids):
-                logger.info(f"{i+1}. {model}")
-                
+                logger.info(f"{i + 1}. {model}")
+
         except Exception as e:
             raise AnthropicAPIError(f"Listing models failed: {e}")
 
@@ -200,6 +211,6 @@ class AnthropicConnection(BaseConnection):
             raise ValueError(f"Invalid parameters: {', '.join(errors)}")
 
         # Call the appropriate method based on action name
-        method_name = action_name.replace('-', '_')
+        method_name = action_name.replace("-", "_")
         method = getattr(self, method_name)
         return method(**kwargs)
