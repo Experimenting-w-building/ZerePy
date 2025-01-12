@@ -58,7 +58,9 @@
     },
     {
       "name": "discord",
-      "message_read_count": 10
+      "message_read_count": 10,
+      "message_emoji_name": "❤️",
+      "server_id": "1327792083599228968"
     }
   ],
   "tasks": [
